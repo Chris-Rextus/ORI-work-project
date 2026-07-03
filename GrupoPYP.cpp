@@ -71,11 +71,9 @@ static char* dupStr(const char* s) {
 }
 
 static char* trim(char* s) {
-    while (*s == ' ' || *s == '\t') s++;
-    if (*s == '\0') return s;
-    char* end = s + strlen(s) - 1;
-    while (end > s && (*end == ' ' || *end == '\t' || *end == '\r' || *end == '\n'))
-        *end-- = '\0';
+    while (*s == ' ' || *s == '\t' || *s == '\r' || *s == '\n') s++;
+    char* end = s + strlen(s);
+    while (end > s && (end[-1]==' '||end[-1]=='\t'||end[-1]=='\r'||end[-1]=='\n')) *--end = '\0';
     return s;
 }
 
@@ -207,6 +205,22 @@ static int countEdges(void) {
 
 /* ==================== leitura do arquivo ==================== */
 
+/* le uma linha completa de qualquer tamanho em um buffer que cresce */
+static char* readFullLine(FILE* f, char** buf, size_t* cap) {
+    size_t len = 0; int c;
+    while ((c = fgetc(f)) != EOF && c != '\n') {
+        if (len + 1 >= *cap) {
+            *cap *= 2;
+            *buf = (char*) realloc(*buf, *cap);
+            if (!*buf) { fprintf(stderr, "erro de memoria\n"); exit(1); }
+        }
+        (*buf)[len++] = (char) c;
+    }
+    if (c == EOF && len == 0) return NULL;
+    (*buf)[len] = '\0';
+    return *buf;
+}
+
 void loadFile(const char* path) {
     FILE* f = fopen(path, "r");
     if (!f) { perror("fopen"); exit(1); }
@@ -219,19 +233,20 @@ void loadFile(const char* path) {
         if (c1 != EOF) ungetc(c1, f);
     }
 
-    char line[MAX_LINE];
-    while (fgets(line, sizeof(line), f)) {
+    size_t cap = MAX_LINE;
+    char* line = (char*) malloc(cap);
+    if (!line) { fprintf(stderr, "erro de memoria\n"); exit(1); }
+    while (readFullLine(f, &line, &cap)) {
         char* tab = strchr(line, '\t');
         if (!tab) continue;
         *tab = '\0';
-
         char* name  = trim(line);
         char* title = trim(tab + 1);
         if (*name == '\0' || *title == '\0') continue;
-
         int id = getOrCreateResearcherId(name);
         registerTitleAuthor(title, id);
     }
+    free(line);
     fclose(f);
 
     connectCollaborators();
