@@ -17,40 +17,34 @@ Yuri Bastos Wirthmann - 812311
 
 /* ==================== estruturas ==================== */
 
-/* lista de inteiros: ids dos autores de um titulo */
 typedef struct IntList {
     int value;
     struct IntList* next;
 } IntList;
 
-/* lista de strings: titulos em comum de uma aresta */
 typedef struct StrList {
-    char* value;                /* aponta para o titulo guardado no TitleEntry */
+    char* value;
     struct StrList* next;
 } StrList;
 
-/* entrada da hash de nomes (nome -> id do no) */
 typedef struct NameEntry {
     char* name;
     int   id;
-    struct NameEntry* next;     /* encadeamento de colisoes */
+    struct NameEntry* next;
 } NameEntry;
 
-/* entrada da hash de titulos (titulo -> autores) */
 typedef struct TitleEntry {
     char*    title;
-    IntList* authorIds;         /* ids de todos os autores deste titulo */
-    struct TitleEntry* next;    /* encadeamento de colisoes tradicionais */
+    IntList* authorIds;
+    struct TitleEntry* next;
 } TitleEntry;
 
-/* aresta do grafo de colaboracoes */
 typedef struct Edge {
     int      neighborId;
-    StrList* titles;            /* titulos publicados em colaboracao */
+    StrList* titles;
     struct Edge* next;
 } Edge;
 
-/* no do grafo */
 typedef struct GraphNode {
     int   id;
     Edge* edges;
@@ -61,8 +55,8 @@ typedef struct GraphNode {
 NameEntry*  g_nameHash[NAME_HASH_SIZE];
 TitleEntry* g_titleHash[TITLE_HASH_SIZE];
 
-char**      g_index     = NULL;   /* id -> nome (indice) */
-GraphNode*  g_graph     = NULL;   /* id -> no do grafo   */
+char**      g_index     = NULL;
+GraphNode*  g_graph     = NULL;
 int         g_nodeCount = 0;
 int         g_capacity  = 0;
 
@@ -76,7 +70,6 @@ static char* dupStr(const char* s) {
     return p;
 }
 
-/* remove espacos e quebras de linha no inicio e no fim */
 static char* trim(char* s) {
     while (*s == ' ' || *s == '\t') s++;
     if (*s == '\0') return s;
@@ -86,7 +79,6 @@ static char* trim(char* s) {
     return s;
 }
 
-/* garante espaco no indice e no grafo para 'needed' nos */
 static void ensureCapacity(int needed) {
     if (needed <= g_capacity) return;
     int newCap = g_capacity ? g_capacity * 2 : 256;
@@ -107,7 +99,6 @@ unsigned int hashString(const char* s, unsigned int tableSize) {
 
 /* ==================== tabela de nomes ==================== */
 
-/* procura um nome; retorna -1 se nao existir */
 static int findResearcherId(const char* name) {
     unsigned int h = hashString(name, NAME_HASH_SIZE);
     for (NameEntry* e = g_nameHash[h]; e; e = e->next)
@@ -115,7 +106,6 @@ static int findResearcherId(const char* name) {
     return -1;
 }
 
-/* procura o nome; se nao existir, cria um novo no no grafo */
 int getOrCreateResearcherId(const char* name) {
     unsigned int h = hashString(name, NAME_HASH_SIZE);
     for (NameEntry* e = g_nameHash[h]; e; e = e->next)
@@ -128,7 +118,7 @@ int getOrCreateResearcherId(const char* name) {
     g_nameHash[h] = e;
 
     ensureCapacity(g_nodeCount + 1);
-    g_index[g_nodeCount]       = e->name;   /* mesmo ponteiro do NameEntry */
+    g_index[g_nodeCount]       = e->name;
     g_graph[g_nodeCount].id    = g_nodeCount;
     g_graph[g_nodeCount].edges = NULL;
     g_nodeCount++;
@@ -154,7 +144,7 @@ void registerTitleAuthor(const char* title, int authorId) {
         }
     }
 
-    /* titulo novo (bucket vazio ou colisao tradicional) -> encadeia */
+    /* colisao tradicional (ou bucket vazio): encadeia novo titulo */
     TitleEntry* t = (TitleEntry*) malloc(sizeof(TitleEntry));
     t->title            = dupStr(title);
     t->authorIds        = (IntList*) malloc(sizeof(IntList));
@@ -166,12 +156,11 @@ void registerTitleAuthor(const char* title, int authorId) {
 
 /* ==================== construcao do grafo ==================== */
 
-/* cria/atualiza a aresta direcionada 'from' -> 'to' com o titulo em comum */
 static void addDirectedEdge(int from, int to, char* title) {
     Edge* e = g_graph[from].edges;
     while (e && e->neighborId != to) e = e->next;
 
-    if (!e) {                       /* ainda nao eram colaboradores */
+    if (!e) {
         e = (Edge*) malloc(sizeof(Edge));
         e->neighborId = to;
         e->titles     = NULL;
@@ -179,17 +168,15 @@ static void addDirectedEdge(int from, int to, char* title) {
         g_graph[from].edges = e;
     }
 
-    /* evita repetir o mesmo titulo na aresta */
     for (StrList* s = e->titles; s; s = s->next)
         if (strcmp(s->value, title) == 0) return;
 
     StrList* s = (StrList*) malloc(sizeof(StrList));
-    s->value  = title;              /* aponta para o titulo do TitleEntry */
+    s->value  = title;
     s->next   = e->titles;
     e->titles = s;
 }
 
-/* liga todos os pares de autores que compartilham um mesmo titulo */
 void connectCollaborators(void) {
     for (int b = 0; b < TITLE_HASH_SIZE; b++) {
         for (TitleEntry* t = g_titleHash[b]; t; t = t->next) {
@@ -202,16 +189,40 @@ void connectCollaborators(void) {
     }
 }
 
+/* ==================== estatisticas de carga ==================== */
+
+static int countUniqueTitles(void) {
+    int total = 0;
+    for (int b = 0; b < TITLE_HASH_SIZE; b++)
+        for (TitleEntry* t = g_titleHash[b]; t; t = t->next) total++;
+    return total;
+}
+
+static int countEdges(void) {
+    long total = 0;
+    for (int i = 0; i < g_nodeCount; i++)
+        for (Edge* e = g_graph[i].edges; e; e = e->next) total++;
+    return (int)(total / 2); /* cada aresta esta armazenada nas duas direcoes */
+}
+
 /* ==================== leitura do arquivo ==================== */
 
 void loadFile(const char* path) {
     FILE* f = fopen(path, "r");
     if (!f) { perror("fopen"); exit(1); }
 
+    /* pula BOM UTF-8 se presente */
+    int c1 = fgetc(f), c2 = fgetc(f), c3 = fgetc(f);
+    if (!(c1 == 0xEF && c2 == 0xBB && c3 == 0xBF)) {
+        if (c3 != EOF) ungetc(c3, f);
+        if (c2 != EOF) ungetc(c2, f);
+        if (c1 != EOF) ungetc(c1, f);
+    }
+
     char line[MAX_LINE];
     while (fgets(line, sizeof(line), f)) {
         char* tab = strchr(line, '\t');
-        if (!tab) continue;              /* linha sem separador: ignora */
+        if (!tab) continue;
         *tab = '\0';
 
         char* name  = trim(line);
@@ -224,11 +235,15 @@ void loadFile(const char* path) {
     fclose(f);
 
     connectCollaborators();
+
+    printf("Arquivo carregado.\n");
+    printf("  Pesquisadores: %d\n", g_nodeCount);
+    printf("  Titulos unicos: %d\n", countUniqueTitles());
+    printf("  Arestas de colaboracao: %d\n", countEdges());
 }
 
 /* ==================== operacoes ==================== */
 
-/* dado um nome, lista seus colaboradores */
 void listCollaborators(const char* name) {
     int id = findResearcherId(name);
     if (id < 0) {
@@ -251,9 +266,9 @@ void listCollaborators(const char* name) {
     printf("Total: %d colaborador(es).\n", count);
 }
 
-/* dado um titulo, lista todos os autores */
 void listAuthors(const char* title) {
     unsigned int h = hashString(title, TITLE_HASH_SIZE);
+    /* percorrer a cadeia trata a colisao tradicional */
     TitleEntry* t = g_titleHash[h];
     while (t && strcmp(t->title, title) != 0) t = t->next;
 
@@ -263,11 +278,39 @@ void listAuthors(const char* title) {
     }
 
     printf("Autores de \"%s\":\n", title);
-    for (IntList* a = t->authorIds; a; a = a->next)
+    int count = 0;
+    for (IntList* a = t->authorIds; a; a = a->next) {
         printf("  - %s\n", g_index[a->value]);
+        count++;
+    }
+    printf("Total: %d autor(es).\n", count);
 }
 
-/* maior grau (numero de colaboradores) entre os vertices */
+/* titulos publicados em colaboracao entre dois pesquisadores */
+void listSharedTitles(const char* nameA, const char* nameB) {
+    int idA = findResearcherId(nameA);
+    int idB = findResearcherId(nameB);
+    if (idA < 0) { printf("Pesquisador \"%s\" nao encontrado.\n", nameA); return; }
+    if (idB < 0) { printf("Pesquisador \"%s\" nao encontrado.\n", nameB); return; }
+    if (idA == idB) { printf("Informe dois nomes diferentes.\n"); return; }
+
+    Edge* e = g_graph[idA].edges;
+    while (e && e->neighborId != idB) e = e->next;
+
+    if (!e) {
+        printf("\"%s\" e \"%s\" nao sao colaboradores.\n", nameA, nameB);
+        return;
+    }
+
+    printf("Titulos em comum entre \"%s\" e \"%s\":\n", nameA, nameB);
+    int count = 0;
+    for (StrList* s = e->titles; s; s = s->next) {
+        printf("  - %s\n", s->value);
+        count++;
+    }
+    printf("Total: %d titulo(s).\n", count);
+}
+
 int maxDegree(void) {
     int max = 0;
     for (int i = 0; i < g_nodeCount; i++) {
@@ -278,7 +321,6 @@ int maxDegree(void) {
     return max;
 }
 
-/* grau medio = soma dos graus / numero de vertices */
 double avgDegree(void) {
     if (g_nodeCount == 0) return 0.0;
     long total = 0;
@@ -328,15 +370,16 @@ int main(int argc, char** argv) {
     loadFile(argv[1]);
 
     int  option;
-    char buf[MAX_QUERY];
+    char buf[MAX_QUERY], buf2[MAX_QUERY];
     do {
         printf("\n1) Colaboradores de um nome\n"
                "2) Autores de um titulo\n"
                "3) Maior grau\n"
                "4) Grau medio\n"
+               "5) Titulos em comum entre dois pesquisadores\n"
                "0) Sair\n> ");
         if (scanf("%d", &option) != 1) break;
-        getchar();  /* consome o '\n' deixado pelo scanf */
+        getchar();
 
         switch (option) {
             case 1:
@@ -356,6 +399,15 @@ int main(int argc, char** argv) {
                 break;
             case 4:
                 printf("Grau medio: %.2f\n", avgDegree());
+                break;
+            case 5:
+                printf("Nome 1: ");
+                if (!fgets(buf, sizeof(buf), stdin)) break;
+                buf[strcspn(buf, "\r\n")] = '\0';
+                printf("Nome 2: ");
+                if (!fgets(buf2, sizeof(buf2), stdin)) break;
+                buf2[strcspn(buf2, "\r\n")] = '\0';
+                listSharedTitles(buf, buf2);
                 break;
             case 0:
                 break;
