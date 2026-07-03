@@ -3,7 +3,7 @@ Grupo PYP
 Integrantes:
 Pedro Augusto Faria - 821124
 Pedro Yudi Teixeira Harada - 800636
-Yuri
+Yuri Bastos Wirthmann - 812311
 */
 
 #include <stdio.h>
