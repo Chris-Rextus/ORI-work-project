@@ -70,7 +70,7 @@ int         g_capacity  = 0;
 
 static char* dupStr(const char* s) {
     size_t n = strlen(s) + 1;
-    char*  p = malloc(n);
+    char*  p = (char*) malloc(n);
     if (!p) { fprintf(stderr, "erro de memoria\n"); exit(1); }
     memcpy(p, s, n);
     return p;
@@ -91,8 +91,8 @@ static void ensureCapacity(int needed) {
     if (needed <= g_capacity) return;
     int newCap = g_capacity ? g_capacity * 2 : 256;
     while (newCap < needed) newCap *= 2;
-    g_index = realloc(g_index, (size_t)newCap * sizeof(char*));
-    g_graph = realloc(g_graph, (size_t)newCap * sizeof(GraphNode));
+    g_index = (char**)     realloc(g_index, (size_t)newCap * sizeof(char*));
+    g_graph = (GraphNode*) realloc(g_graph, (size_t)newCap * sizeof(GraphNode));
     if (!g_index || !g_graph) { fprintf(stderr, "erro de memoria\n"); exit(1); }
     g_capacity = newCap;
 }
@@ -121,7 +121,7 @@ int getOrCreateResearcherId(const char* name) {
     for (NameEntry* e = g_nameHash[h]; e; e = e->next)
         if (strcmp(e->name, name) == 0) return e->id;
 
-    NameEntry* e = malloc(sizeof(NameEntry));
+    NameEntry* e = (NameEntry*) malloc(sizeof(NameEntry));
     e->name = dupStr(name);
     e->id   = g_nodeCount;
     e->next = g_nameHash[h];
@@ -146,7 +146,7 @@ void registerTitleAuthor(const char* title, int authorId) {
             /* colisao repetida: mesmo titulo -> adiciona autor sem duplicar */
             for (IntList* a = t->authorIds; a; a = a->next)
                 if (a->value == authorId) return;
-            IntList* node = malloc(sizeof(IntList));
+            IntList* node = (IntList*) malloc(sizeof(IntList));
             node->value  = authorId;
             node->next   = t->authorIds;
             t->authorIds = node;
@@ -155,9 +155,9 @@ void registerTitleAuthor(const char* title, int authorId) {
     }
 
     /* titulo novo (bucket vazio ou colisao tradicional) -> encadeia */
-    TitleEntry* t = malloc(sizeof(TitleEntry));
+    TitleEntry* t = (TitleEntry*) malloc(sizeof(TitleEntry));
     t->title            = dupStr(title);
-    t->authorIds        = malloc(sizeof(IntList));
+    t->authorIds        = (IntList*) malloc(sizeof(IntList));
     t->authorIds->value = authorId;
     t->authorIds->next  = NULL;
     t->next             = g_titleHash[h];
@@ -172,7 +172,7 @@ static void addDirectedEdge(int from, int to, char* title) {
     while (e && e->neighborId != to) e = e->next;
 
     if (!e) {                       /* ainda nao eram colaboradores */
-        e = malloc(sizeof(Edge));
+        e = (Edge*) malloc(sizeof(Edge));
         e->neighborId = to;
         e->titles     = NULL;
         e->next       = g_graph[from].edges;
@@ -183,7 +183,7 @@ static void addDirectedEdge(int from, int to, char* title) {
     for (StrList* s = e->titles; s; s = s->next)
         if (strcmp(s->value, title) == 0) return;
 
-    StrList* s = malloc(sizeof(StrList));
+    StrList* s = (StrList*) malloc(sizeof(StrList));
     s->value  = title;              /* aponta para o titulo do TitleEntry */
     s->next   = e->titles;
     e->titles = s;
