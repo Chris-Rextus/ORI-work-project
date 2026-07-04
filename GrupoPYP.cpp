@@ -391,15 +391,14 @@ static void freeAll(void) {
 }
 
 /* ==================== interface grafica em Qt (adicionado) ==================== */
-/* Nenhuma classe aqui usa Q_OBJECT -> nao ha moc: tudo fica num unico arquivo.
-   As tabelas globais e as funcoes ja existentes sao reutilizadas sem alteracao. */
+
 namespace ui {
 
-const double K_SPRING      = 150.0;   /* comprimento ideal das arestas */
-const int    MAX_NEIGHBORS = 35;     /* limite de vizinhos exibidos por foco */
-const int    LAYOUT_ITERS  = 900;    /* teto de iteracoes do layout */
+const double K_SPRING      = 150.0;   
+const int    MAX_NEIGHBORS = 35;     
+const int    LAYOUT_ITERS  = 900;    
 
-class GraphView;   /* declaracao adiantada (State guarda um ponteiro) */
+class GraphView; 
 
 struct LNode {
     int id = -1;
@@ -410,7 +409,7 @@ struct LNode {
 };
 
 struct LEdge {
-    int a = 0, b = 0;                 /* indices em State::nodes */
+    int a = 0, b = 0;                
     QGraphicsLineItem* line = nullptr;
 };
 
@@ -425,7 +424,7 @@ struct State {
 
     std::vector<LNode> nodes;
     std::vector<LEdge> edges;
-    std::unordered_map<int,int> index;   /* id do pesquisador -> posicao em nodes */
+    std::unordered_map<int,int> index; 
 
     int    center       = -1;
     int    maxDegGlobal = 1;
@@ -556,7 +555,6 @@ void buildEgo(State& st, int centerId) {
         lab->setZValue(2);
         lab->setAcceptedMouseButtons(Qt::NoButton);
         lab->setData(0, n.id);
-        /* so o centro e os vizinhos de maior grau recebem rotulo -> menos poluicao */
         lab->setVisible(n.id == centerId || n.degree >= 3);
         QFont f("Sans Serif", 0, QFont::Light);
         f.setPointSizeF(n.id == centerId ? 9.0 : 6.5);
@@ -579,24 +577,22 @@ void applyLayout(State& st) {
 
     for (int i = 0; i < n; i++) { st.nodes[i].dx = 0; st.nodes[i].dy = 0; }
 
-    /* repulsao entre todos os pares, com distancia minima para nao explodir */
     for (int i = 0; i < n; i++)
         for (int j = i + 1; j < n; j++) {
             double ex = st.nodes[i].x - st.nodes[j].x;
             double ey = st.nodes[i].y - st.nodes[j].y;
             double d = std::sqrt(ex*ex + ey*ey);
-            if (d < 1.0) {   /* evita divisao por ~0 e empurra em direcao estavel */
+            if (d < 1.0) {   
                 ex = (i - j); ey = 1.0;
                 d = std::sqrt(ex*ex + ey*ey);
             }
             double force = (K_SPRING * K_SPRING) / d;
-            if (force > 1000.0) force = 1000.0;   /* teto: nada de saltos violentos */
+            if (force > 1000.0) force = 1000.0;   
             double fx = ex / d * force, fy = ey / d * force;
             st.nodes[i].dx += fx; st.nodes[i].dy += fy;
             st.nodes[j].dx -= fx; st.nodes[j].dy -= fy;
         }
 
-    /* atracao ao longo das arestas */
     for (auto& le : st.edges) {
         double ex = st.nodes[le.a].x - st.nodes[le.b].x;
         double ey = st.nodes[le.a].y - st.nodes[le.b].y;
@@ -607,20 +603,17 @@ void applyLayout(State& st) {
         st.nodes[le.b].dx += fx; st.nodes[le.b].dy += fy;
     }
 
-    /* leve gravidade para o centro, mantem o grafo coeso */
     for (int i = 0; i < n; i++) {
         st.nodes[i].dx += -st.nodes[i].x * 0.03;
         st.nodes[i].dy += -st.nodes[i].y * 0.03;
     }
 
-    /* integra com velocidade amortecida: evita o vai-e-vem entre duas posicoes */
-    const double DAMPING  = 0.85;   /* atrito: quanto da velocidade sobrevive por frame */
-    const double MAX_STEP = 8.0;    /* teto de seguranca, agora raramente ativado */
+    const double DAMPING  = 0.85;   
+    const double MAX_STEP = 8.0;    
     double totalMovement = 0.0;
     for (int i = 0; i < n; i++) {
-        if (st.nodes[i].id == st.center) continue;   /* centro fixo na origem */
+        if (st.nodes[i].id == st.center) continue;  
 
-        /* acumula forca na velocidade e aplica atrito -> convergencia suave */
         st.nodes[i].vx = (st.nodes[i].vx + st.nodes[i].dx * 0.05) * DAMPING;
         st.nodes[i].vy = (st.nodes[i].vy + st.nodes[i].dy * 0.05) * DAMPING;
 
@@ -644,16 +637,14 @@ void applyLayout(State& st) {
         nd.label->setPos(nd.x - br.width() / 2.0, nd.y - r - br.height() - 4.0);
     }
 
-    st.temp *= 0.99;                 /* resfriamento gradual */
+    st.temp *= 0.99;            
     st.iter++;
 
-    /* media de deslocamento por no neste frame */
     double avgMovement = (n > 1) ? totalMovement / (n - 1) : 0.0;
 
-    /* para assim que o grafo estabiliza (quase sem movimento) ou atinge o teto */
     if (avgMovement < 0.15 || st.iter >= LAYOUT_ITERS) {
         st.timer.stop();
-        if (st.view)                 /* enquadra apenas UMA vez, no fim */
+        if (st.view)         
             st.view->fitInView(st.scene.itemsBoundingRect().adjusted(-60,-60,60,60),
                                Qt::KeepAspectRatio);
     }
@@ -689,7 +680,7 @@ void focus(State& st, int id) {
 int runUi(int argc, char** argv, const char* path) {
     QApplication app(argc, argv);
 
-    loadFile(path);   /* reutiliza a carga ja existente (popula as tabelas globais) */
+    loadFile(path); 
 
     State* st = new State();
     st->maxDegGlobal = maxDegree();
@@ -772,13 +763,13 @@ int runUi(int argc, char** argv, const char* path) {
         int d = nodeDegree(i);
         if (d > best) { best = d; start = i; }
     }
-    focus(*st, start);   /* foco inicial: pesquisador de maior grau */
+    focus(*st, start);  
 
     window->show();
     st->view->fitInView(st->scene.itemsBoundingRect().adjusted(-60,-60,60,60),
                         Qt::KeepAspectRatio);
     int rc = app.exec();
-    freeAll();   /* mesma limpeza usada pelo console */
+    freeAll();  
     return rc;
 }
 
@@ -793,7 +784,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    /* ---- modo interface grafica (adicionado): ./ori --ui <arquivo> ---- */
+    /* modo interface grafica: ./ori --ui <arquivo>  */
     {
         bool useUi = false;
         const char* uiPath = NULL;
